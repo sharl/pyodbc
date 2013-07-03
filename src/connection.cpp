@@ -71,6 +71,13 @@ static bool Connect(PyObject* pConnectString, HDBC hdbc, bool fAnsi, long timeou
 
     if (timeout > 0)
     {
+        // ad hoc: set to connection_timeout, then avoid block next SQLDriverConnect*()
+        Py_BEGIN_ALLOW_THREADS
+        ret = SQLSetConnectAttr(hdbc, SQL_ATTR_CONNECTION_TIMEOUT, (SQLPOINTER)timeout, SQL_IS_UINTEGER);
+        Py_END_ALLOW_THREADS
+        if (!SQL_SUCCEEDED(ret))
+            RaiseErrorFromHandle("SQLSetConnectAttr(SQL_ATTR_CONNECTION_TIMEOUT)", hdbc, SQL_NULL_HANDLE);
+
         Py_BEGIN_ALLOW_THREADS
         ret = SQLSetConnectAttr(hdbc, SQL_ATTR_LOGIN_TIMEOUT, (SQLPOINTER)timeout, SQL_IS_UINTEGER);
         Py_END_ALLOW_THREADS
@@ -100,6 +107,10 @@ static bool Connect(PyObject* pConnectString, HDBC hdbc, bool fAnsi, long timeou
         //     return false;
         // }
         // Py_XDECREF(error);
+
+        // Sybase and SQL server is OK
+        RaiseErrorFromHandle("SQLDriverConnectW", hdbc, SQL_NULL_HANDLE);
+        return false;
     }
         
     SQLCHAR szConnect[cchMax];
@@ -197,7 +208,7 @@ PyObject* Connection_New(PyObject* pConnectString, bool fAutoCommit, bool fAnsi,
     cnxn->hdbc            = hdbc;
     cnxn->nAutoCommit     = fAutoCommit ? SQL_AUTOCOMMIT_ON : SQL_AUTOCOMMIT_OFF;
     cnxn->searchescape    = 0;
-    cnxn->timeout         = 0;
+    cnxn->timeout         = timeout ? timeout : 0;
     cnxn->unicode_results = fUnicodeResults;
     cnxn->conv_count      = 0;
     cnxn->conv_types      = 0;
